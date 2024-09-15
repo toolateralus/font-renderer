@@ -1,6 +1,6 @@
 COMPILER := clang++
-COMPILER_FLAGS := -std=c++23 -Ithirdparty/freetype/include -g
-LD_FLAGS := -lGL -lGLEW -lglfw -lassimp -ldraco -lfreetype
+COMPILER_FLAGS := -std=c++23 -Ideps -g
+LD_FLAGS := -lGL -lGLEW -lglfw -lfreetype
 OBJ_DIR := objs
 BIN_DIR := bin
 

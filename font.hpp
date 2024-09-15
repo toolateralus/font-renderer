@@ -15,10 +15,11 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <string>
 
-#include <jstl/opengl/camera.hpp>
 #include <jstl/opengl/shader.hpp>
 
 using namespace jstl::opengl;
+
+namespace jstl::opengl::font {
 
 struct Character {
   GLuint textureID;
@@ -86,21 +87,46 @@ struct Font {
   std::array<Character, 128> characters;
 };
 
-struct FontRenderer {
-  const char * vertexSource = R"DELIM(
-    #version 450 core
-    layout(location = 0) out vec2 TexCoords;
-    layout(location = 0) in vec4 vertex;
-    layout(location = 2) uniform mat4 projection;
+static auto MeasureText(Font &font, const std::string &text, float scale)
+    -> glm::vec2 {
+  float width = 0.0f;
+  float maxHeight = 0.0f;
+  float maxBearingY = 0.0f;
+  float minBearingY = 0.0f;
 
-    void main()
-    {
-      gl_Position = projection * vec4(vertex.xy, 0.0, 1.0);
-      TexCoords = vertex.zw;
+  for (const char &c : text) {
+    const Character &glyph = font.characters[c];
+    width += (glyph.advance >> 6) * scale;
+
+    float glyphHeight = glyph.size.y * scale;
+    float bearingY = glyph.bearing.y * scale;
+
+    if (bearingY > maxBearingY) {
+      maxBearingY = bearingY;
     }
-  )DELIM";
-  
-  const char *fragSource = R"DELIM(
+    if ((bearingY - glyphHeight) < minBearingY) {
+      minBearingY = bearingY - glyphHeight;
+    }
+  }
+  float height = maxBearingY - minBearingY;
+  return {width, height};
+}
+
+struct FontRenderer {
+  static constexpr const char *vertexSource = R"DELIM(
+  #version 450 core
+  layout(location = 0) out vec2 TexCoords;
+  layout(location = 0) in vec4 vertex;
+  layout(location = 2) uniform mat4 projection;
+
+  void main()
+  {
+    gl_Position = projection * vec4(vertex.xy, 0.0, 1.0);
+    TexCoords = vertex.zw;
+  }
+)DELIM";
+
+  static constexpr const char *fragSource = R"DELIM(
     #version 450 core
 
     layout(location = 0) in vec2 TexCoords;
@@ -115,10 +141,11 @@ struct FontRenderer {
       FragColor = vec4(color, 1.0) * sampled;
     }
   )DELIM";
-  
+
   glm::mat4 projection;
-  
-  FontRenderer() : shader(Shader::loadFromSource(jstl::opengl::Shader::Kind::Vertex, vertexSource, fragSource)) {
+  FontRenderer()
+      : shader(Shader::loadFromSource(jstl::opengl::Shader::Kind::Vertex,
+                                      vertexSource, fragSource)) {
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
     glBindVertexArray(vao);
@@ -130,43 +157,19 @@ struct FontRenderer {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
   }
-  auto getTextSize(Font &font, const std::string &text, float scale)
-      -> glm::vec2 {
-    float width = 0.0f;
-    float maxHeight = 0.0f;
-    float maxBearingY = 0.0f;
-    float minBearingY = 0.0f;
 
-    for (const char &c : text) {
-      const Character &glyph = font.characters[c];
-      width += (glyph.advance >> 6) * scale;
-
-      float glyphHeight = glyph.size.y * scale;
-      float bearingY = glyph.bearing.y * scale;
-
-      if (bearingY > maxBearingY) {
-        maxBearingY = bearingY;
-      }
-      if ((bearingY - glyphHeight) < minBearingY) {
-        minBearingY = bearingY - glyphHeight;
-      }
-    }
-    float height = maxBearingY - minBearingY;
-    return {width, height};
-  }
-  
   inline ~FontRenderer() {
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
   }
-  
+
   inline auto setViewport(const glm::vec2 viewport) {
     this->projection = glm::ortho(0.0f, viewport.x, 0.0f, viewport.y);
   }
-  
-  auto renderText(const std::string &text, float x, float y,
-                  float scale, const glm::vec3 &color,
-                  Font &font = Font::defaultFont()) -> void {
+
+  inline auto renderText(const std::string &text, glm::vec2 pos, float scale,
+                         const glm::vec3 &color,
+                         Font &font = Font::defaultFont()) -> void {
     shader.use();
     shader.setMat4("projection", projection);
     shader.setVec3("color", color);
@@ -174,8 +177,8 @@ struct FontRenderer {
     glBindVertexArray(vao);
     for (const auto &character : text) {
       const Character &ch = font.characters[character];
-      float xpos = x + ch.bearing.x * scale;
-      float ypos = y - (ch.size.y - ch.bearing.y) * scale;
+      float xpos = pos.x + ch.bearing.x * scale;
+      float ypos = pos.y - (ch.size.y - ch.bearing.y) * scale;
       float width = ch.size.x * scale;
       float height = ch.size.y * scale;
       float vertices[6][4] = {{xpos, ypos + height, 0.0f, 0.0f},
@@ -190,13 +193,15 @@ struct FontRenderer {
       glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
       glBindBuffer(GL_ARRAY_BUFFER, 0);
       glDrawArrays(GL_TRIANGLES, 0, 6);
-      x += (ch.advance >> 6) * scale;
+      pos.x += (ch.advance >> 6) * scale;
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
   }
-  
-  private:
+
+private:
   Shader shader;
   GLuint vao, vbo;
 };
+
+} // namespace jstl::opengl::font
