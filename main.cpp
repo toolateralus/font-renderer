@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[]) {
 	jstl::opengl::Window window("Font renderer");
-	FontRenderer fontRenderer("res/shaders/font/font.vert", "res/shaders/font/font.frag");
+	FontRenderer fontRenderer{};
 	std::unique_ptr<Camera> camera = std::make_unique<Camera>(window);
 	
 	while (!glfwWindowShouldClose(window.window)) {
