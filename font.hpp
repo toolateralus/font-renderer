@@ -13,7 +13,6 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <memory>
 #include <string>
 
 #include <jstl/opengl/camera.hpp>
@@ -88,7 +87,6 @@ struct Font {
 };
 
 struct FontRenderer {
-  
   const char * vertexSource = R"DELIM(
     #version 450 core
     layout(location = 0) out vec2 TexCoords;
@@ -118,8 +116,9 @@ struct FontRenderer {
     }
   )DELIM";
   
-  FontRenderer()
-      : shader(Shader::loadFromSource(jstl::opengl::Shader::Kind::Vertex, vertexSource, fragSource)) {
+  glm::mat4 projection;
+  
+  FontRenderer() : shader(Shader::loadFromSource(jstl::opengl::Shader::Kind::Vertex, vertexSource, fragSource)) {
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
     glBindVertexArray(vao);
@@ -160,11 +159,14 @@ struct FontRenderer {
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
   }
-  auto renderText(Font &font, const std::string &text, float x, float y,
+  
+  inline auto setViewport(const glm::vec2 viewport) {
+    this->projection = glm::ortho(0.0f, viewport.x, 0.0f, viewport.y);
+  }
+  
+  auto renderText(const std::string &text, float x, float y,
                   float scale, const glm::vec3 &color,
-                  const std::unique_ptr<Camera> &camera) -> void {
-    auto projection =
-        glm::ortho(0.0f, camera->viewport.x, 0.0f, camera->viewport.y);
+                  Font &font = Font::defaultFont()) -> void {
     shader.use();
     shader.setMat4("projection", projection);
     shader.setVec3("color", color);
@@ -190,7 +192,6 @@ struct FontRenderer {
       glDrawArrays(GL_TRIANGLES, 0, 6);
       x += (ch.advance >> 6) * scale;
     }
-
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
   }
